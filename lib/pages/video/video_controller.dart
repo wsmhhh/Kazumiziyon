@@ -19,6 +19,7 @@ import 'package:kazumi/modules/comments/comment_item.dart';
 import 'package:kazumi/modules/comments/comment_response.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/plugin/plugin_cookie_manager.dart';
 import 'package:kazumi/utils/episode_url.dart';
 import 'package:kazumi/utils/http_headers.dart';
 import 'package:kazumi/utils/media.dart';
@@ -619,6 +620,14 @@ abstract class _VideoPageController with Store implements Disposable {
       final bool forceAdBlocker =
           GStorage.getSetting(SettingsKeys.forceAdBlocker);
 
+      // 登录站点可能同时校验媒体请求的 Cookie 与 User-Agent，
+      // Cookie 只在域名匹配时附加，第三方 CDN 不会收到站点凭证。
+      final cookieHeader = PluginCookieManager.instance
+          .cookieHeaderFor(currentPlugin.name, source.url);
+      final verifiedUserAgent = cookieHeader.isEmpty
+          ? null
+          : PluginCookieManager.instance.userAgentFor(currentPlugin.name);
+
       final params = PlaybackInitParams(
         videoUrl: source.url,
         offset: source.offset,
@@ -631,9 +640,11 @@ abstract class _VideoPageController with Store implements Disposable {
         pageUrl: resolvedEpisode.pageUrl,
         sortNumber: resolvedEpisode.sortNumber,
         httpHeaders: {
-          'user-agent': currentPlugin.userAgent.isEmpty
-              ? getRandomUA()
-              : currentPlugin.userAgent,
+          'user-agent': verifiedUserAgent ??
+              (currentPlugin.userAgent.isEmpty
+                  ? getRandomUA()
+                  : currentPlugin.userAgent),
+          if (cookieHeader.isNotEmpty) 'cookie': cookieHeader,
           if (currentPlugin.referer.isNotEmpty)
             'referer': currentPlugin.referer,
         },

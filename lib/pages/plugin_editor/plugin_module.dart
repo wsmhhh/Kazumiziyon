@@ -1,5 +1,6 @@
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_editor_page.dart';
+import 'package:kazumi/pages/plugin_editor/plugin_login_page.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_shop_page.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_test_page.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_view_page.dart';
@@ -31,6 +32,16 @@ final pluginModule = createModule(
             return const RouteErrorPage(message: '规则测试参数无效，请返回后重试。');
           }
           return PluginTestPage(plugin: plugin);
+        },
+      )
+      ..route(
+        '/login',
+        child: (context, state) {
+          final plugin = state.arguments;
+          if (plugin is! Plugin) {
+            return const RouteErrorPage(message: '网站登录参数无效，请返回后重试。');
+          }
+          return PluginLoginPage(plugin: plugin);
         },
       )
       ..route(

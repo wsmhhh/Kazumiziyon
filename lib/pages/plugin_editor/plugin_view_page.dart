@@ -20,6 +20,7 @@ import 'package:kazumi/pages/plugin_editor/rule_management_widgets.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/plugin/plugin_cookie_manager.dart';
 import 'package:kazumi/services/plugin/plugin_import_parser.dart';
 
 class PluginViewPage extends StatefulWidget {
@@ -149,6 +150,9 @@ class _PluginViewPageState extends State<PluginViewPage> {
     }
     try {
       await _controller.removePlugins(names);
+      for (final name in names) {
+        await PluginCookieManager.instance.clear(name);
+      }
       if (mounted) _leaveSelection();
       KazumiDialog.showToast(message: '已删除 ${names.length} 条规则');
     } catch (_) {
@@ -156,6 +160,37 @@ class _PluginViewPageState extends State<PluginViewPage> {
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
+  }
+
+  Future<void> _openLogin(Plugin plugin) async {
+    await context.pushNamed('/settings/plugin/login', arguments: plugin);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _logout(Plugin plugin) async {
+    final confirmed = await KazumiDialog.show<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('退出登录？'),
+        content: Text('将清除 ${plugin.name} 已保存的 Cookie 和登录状态，'
+            '之后需要重新登录才能访问需要登录的内容。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('退出登录'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await PluginCookieManager.instance.clear(plugin.name);
+    if (!mounted) return;
+    setState(() {});
+    KazumiDialog.showToast(message: '已退出 ${plugin.name} 的登录');
   }
 
   Future<void> _reorder(int oldIndex, int newIndex) async {
@@ -400,6 +435,18 @@ class _PluginViewPageState extends State<PluginViewPage> {
                                 label: '可更新',
                                 background: colors.secondaryContainer,
                                 foreground: colors.onSecondaryContainer),
+                          if (PluginCookieManager.instance
+                              .isLoggedIn(plugin.name))
+                            RuleTag(
+                                label: '已登录',
+                                background: colors.primaryContainer,
+                                foreground: colors.onPrimaryContainer)
+                          else if (PluginCookieManager.instance
+                              .hasCredentials(plugin.name))
+                            RuleTag(
+                                label: '已验证',
+                                background: colors.tertiaryContainer,
+                                foreground: colors.onTertiaryContainer),
                           if (_controller.validityTracker
                               .isSearchValid(plugin.name))
                             RuleTag(
@@ -460,6 +507,16 @@ class _PluginViewPageState extends State<PluginViewPage> {
               onPressed: () =>
                   context.pushNamed('/settings/plugin/test', arguments: plugin),
               label: '测试规则'),
+          KazumiMenuItem(
+              onPressed: () => _openLogin(plugin),
+              label: PluginCookieManager.instance.hasCredentials(plugin.name)
+                  ? '重新登录网站'
+                  : '网站登录'),
+          if (PluginCookieManager.instance.hasCredentials(plugin.name))
+            KazumiMenuItem(
+                destructive: true,
+                onPressed: () => _logout(plugin),
+                label: '退出登录'),
           KazumiMenuItem(
               onPressed: _updating ? null : () => _updateOne(plugin),
               label: '检查更新'),

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:kazumi/services/deep_links/app_deep_links.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/download/download_directory_service.dart';
+import 'package:kazumi/services/plugin/plugin_cookie_manager.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:kazumi/services/network/metered_network_service.dart';
 import 'package:kazumi/services/network/ech_http_licenses.dart';
@@ -71,6 +72,8 @@ void main() async {
         }));
     return;
   }
+  // 登录凭证持久化：读取失败时内部会降级为仅内存模式，不阻塞启动。
+  await PluginCookieManager.instance.init();
   await DownloadDirectoryService().restoreAccess();
   final showWindowButton = DesktopWindowConfig.showWindowButton;
   if (isDesktop()) {
