@@ -8,6 +8,7 @@ import 'package:kazumi/bean/widget/loading_indicator.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/plugin/plugin_cookie_manager.dart';
+import 'package:kazumi/utils/http_headers.dart';
 
 /// 网站登录页
 ///
@@ -38,6 +39,7 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
   bool _canGoBack = false;
   bool _preparing = true;
   bool _saving = false;
+  bool _desktopMode = true;
   String? _loadError;
 
   bool get _supportsEmbeddedWebView =>
@@ -137,8 +139,6 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
   }
 
   PlatformInAppWebViewWidget _buildWebView() {
-    final savedUserAgent =
-        PluginCookieManager.instance.userAgentFor(widget.plugin.name);
     return PlatformInAppWebViewWidget(
       PlatformInAppWebViewWidgetCreationParams(
         initialUrlRequest: URLRequest(url: WebUri(_initialUrl)),
@@ -151,9 +151,14 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
           cacheEnabled: true,
           mediaPlaybackRequiresUserGesture: false,
           supportMultipleWindows: false,
-          userAgent: savedUserAgent == null || savedUserAgent.isEmpty
-              ? null
-              : savedUserAgent,
+          userAgent: _resolveUserAgent(),
+          // 桌面视图：按站点桌面宽度排版并允许双指缩放，
+          // 避免部分只提供电脑版界面的站点在手机上无法操作。
+          useWideViewPort: true,
+          loadWithOverviewMode: true,
+          supportZoom: true,
+          builtInZoomControls: true,
+          displayZoomControls: false,
         ),
         onWebViewCreated: (controller) {
           _controller = controller;
@@ -189,6 +194,53 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
         },
       ),
     );
+  }
+
+  /// 解析登录页 WebView 的 User-Agent。
+  ///
+  /// 桌面模式优先复用与当前模式匹配的已保存 UA（保持 Cookie 指纹一致），
+  /// 否则使用内置桌面 Chrome UA；移动模式交给系统默认移动 UA。
+  String? _resolveUserAgent() {
+    final saved =
+        PluginCookieManager.instance.userAgentFor(widget.plugin.name)?.trim();
+    final ruleUserAgent = widget.plugin.userAgent.trim();
+    for (final candidate in <String>[
+      if (saved != null) saved,
+      ruleUserAgent,
+    ]) {
+      if (candidate.isEmpty) continue;
+      if (_looksMobile(candidate) != _desktopMode) return candidate;
+    }
+    return _desktopMode ? getRandomUA() : null;
+  }
+
+  bool _looksMobile(String userAgent) {
+    return RegExp(
+      r'Mobi|Android|iPhone|iPad|iPod|HarmonyOS',
+      caseSensitive: false,
+    ).hasMatch(userAgent);
+  }
+
+  /// 在桌面版与移动版网页之间切换，并停留在当前地址。
+  Future<void> _toggleDesktopMode() async {
+    if (_preparing) return;
+    var target = _currentUrl;
+    final controller = _controller;
+    if (controller != null) {
+      try {
+        target = (await controller.getUrl())?.toString() ?? target;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _desktopMode = !_desktopMode;
+      if (target.trim().isNotEmpty) _initialUrl = target;
+      _currentUrl = target;
+      _controller = null;
+      _webView = null;
+      _preparing = true;
+    });
+    await _prepareWebView();
   }
 
   Future<void> _refreshCanGoBack() async {
@@ -523,6 +575,16 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
               onPressed: _editLoginUrl,
               icon: const Icon(Icons.edit_outlined, size: 18),
             ),
+            IconButton(
+              tooltip: _desktopMode ? '切换到移动版网页' : '切换到桌面版网页',
+              onPressed: _preparing ? null : _toggleDesktopMode,
+              icon: Icon(
+                _desktopMode
+                    ? Icons.desktop_windows_rounded
+                    : Icons.smartphone_rounded,
+                size: 18,
+              ),
+            ),
           ],
         ),
       ),
@@ -541,7 +603,8 @@ class _PluginLoginPageState extends State<PluginLoginPage> {
             children: [
               Text(
                 '在网页中完成登录（账号密码、扫码或验证码均可），'
-                '看到已登录状态后点击「完成登录」。',
+                '看到已登录状态后点击「完成登录」。'
+                '若网站只提供电脑版界面，可用地址栏右侧的图标切换桌面/移动版。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
