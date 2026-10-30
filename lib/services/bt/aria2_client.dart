@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:kazumi/modules/bt/bt_task.dart';
 import 'package:kazumi/services/logging/logger.dart';
@@ -21,21 +23,31 @@ class Aria2Client {
   Aria2Client({
     required this.port,
     required this.secret,
+    this.host = '127.0.0.1',
     Dio? dio,
   }) : _dio = dio ??
             Dio(BaseOptions(
-              connectTimeout: const Duration(seconds: 5),
+              connectTimeout: const Duration(seconds: 2),
               receiveTimeout: const Duration(seconds: 30),
               sendTimeout: const Duration(seconds: 10),
               headers: const {'Content-Type': 'application/json'},
+              // aria2 answers with `application/json-rpc`, which Dio's default
+              // transformer does not treat as JSON. Read the body as text and
+              // decode it ourselves so the content type cannot break RPC.
+              responseType: ResponseType.plain,
             ));
 
   final int port;
   final String secret;
+
+  /// Loopback address used for RPC. A few Android builds only expose the IPv6
+  /// loopback, so the engine probes 127.0.0.1, ::1 and localhost in turn.
+  final String host;
   final Dio _dio;
   int _requestId = 0;
 
-  Uri get endpoint => Uri.parse('http://127.0.0.1:$port/jsonrpc');
+  Uri get endpoint =>
+      Uri(scheme: 'http', host: host, port: port, path: '/jsonrpc');
 
   Future<dynamic> call(
     String method, [
@@ -53,9 +65,12 @@ class Aria2Client {
 
     try {
       final response = await _dio.post<dynamic>(endpoint.toString(), data: payload);
-      final data = response.data;
-      if (data is! Map) {
-        throw Aria2Exception('aria2 返回了无法解析的响应');
+      final data = _decodeBody(response.data);
+      if (data == null) {
+        final preview = _preview(response.data);
+        throw Aria2Exception(
+          'aria2 返回了无法解析的响应${preview.isEmpty ? '' : '：$preview'}',
+        );
       }
       final error = data['error'];
       if (error is Map) {
@@ -185,6 +200,37 @@ class Aria2Client {
   Future<void> shutdown() => call('aria2.shutdown');
 
   Future<void> forceShutdown() => call('aria2.forceShutdown');
+
+  /// Decodes an RPC body without trusting the `Content-Type` header.
+  static Map<String, dynamic>? _decodeBody(Object? body) {
+    if (body is Map) return Map<String, dynamic>.from(body);
+    if (body is List<int>) {
+      try {
+        return _decodeBody(utf8.decode(body));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (body is String) {
+      final text = body.trim();
+      if (text.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  static String _preview(Object? body) {
+    if (body == null) return '';
+    final text = body is String ? body : body.toString();
+    final single = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (single.isEmpty) return '';
+    return single.length > 160 ? '${single.substring(0, 160)}…' : single;
+  }
 
   static String _describeDioError(DioException e) {
     switch (e.type) {

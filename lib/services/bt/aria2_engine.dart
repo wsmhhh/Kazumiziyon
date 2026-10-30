@@ -98,7 +98,7 @@ class Aria2Engine {
       '--listen-port=$listenPort',
       '--max-concurrent-downloads=$maxConcurrent',
       '--summary-interval=0',
-      '--console-log-level=warn',
+      '--console-log-level=notice',
       if (extraArgs.isNotEmpty) ..._splitArgs(extraArgs),
     ];
 
@@ -142,46 +142,83 @@ class Aria2Engine {
     // Avoid unawaited() noise; exitCode is also observed while waiting.
     unawaited(exitCode);
 
-    final client = Aria2Client(port: rpcPort, secret: secret);
-    final ready = await _waitUntilReady(client, process);
-    if (!ready) {
+    final Aria2Client client;
+    try {
+      client = await _waitUntilReady(rpcPort, secret, process);
+    } catch (_) {
       _client = null;
-      final detail = _recentLog.toString().trim();
       _killProcess();
-      throw Aria2EngineException(
-        'aria2 启动超时${detail.isEmpty ? '' : '：$detail'}',
-        needsBinary: detail.contains('No such file'),
-      );
+      rethrow;
     }
 
     _client = client;
-    KazumiLogger().i('Aria2: ready on 127.0.0.1:$rpcPort');
+    KazumiLogger().i('Aria2: ready on ${client.host}:$rpcPort');
     return client;
   }
 
-  Future<bool> _waitUntilReady(Aria2Client client, Process process) async {
+  /// Waits until aria2 answers JSON-RPC, trying every loopback address.
+  ///
+  /// Both the exit code and the last RPC failure are reported, because a bare
+  /// "启动超时" hides whether the process died or the connection was refused.
+  Future<Aria2Client> _waitUntilReady(
+    int rpcPort,
+    String secret,
+    Process process,
+  ) async {
+    final clients = <String, Aria2Client>{
+      for (final host in const ['127.0.0.1', '::1', 'localhost'])
+        host: Aria2Client(port: rpcPort, secret: secret, host: host),
+    };
+    final failures = <String, String>{};
     final deadline = DateTime.now().add(_startupTimeout);
+    var attempts = 0;
+
     while (DateTime.now().isBefore(deadline)) {
       // The process dying is the usual failure mode for a wrong binary.
-      try {
-        if (await process.exitCode.timeout(
-              const Duration(milliseconds: 1),
-              onTimeout: () => -1,
-            ) !=
-            -1) {
-          return false;
+      final exitCode = await process.exitCode.timeout(
+        const Duration(milliseconds: 1),
+        onTimeout: () => -1,
+      );
+      if (exitCode != -1) {
+        final detail = _recentLog.toString().trim();
+        throw Aria2EngineException(
+          'aria2 进程已退出（exit $exitCode）'
+          '${detail.isEmpty ? '' : '：$detail'}',
+          needsBinary: detail.contains('No such file'),
+        );
+      }
+
+      for (final entry in clients.entries) {
+        try {
+          await entry.value.getVersion();
+          return entry.value;
+        } on Aria2Exception catch (e) {
+          failures[entry.key] = e.message;
         }
-      } on TimeoutException {
-        // Still running.
       }
-      try {
-        await client.getVersion();
-        return true;
-      } on Aria2Exception {
-        await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      attempts++;
+      if (attempts == 1 || attempts % 20 == 0) {
+        KazumiLogger().w(
+          'Aria2: RPC 尚未就绪（端口 $rpcPort，第 $attempts 次）'
+          '${_describeFailures(failures)}',
+        );
       }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    return false;
+
+    final detail = _recentLog.toString().trim();
+    throw Aria2EngineException(
+      'aria2 启动超时（端口 $rpcPort）'
+      '${_describeFailures(failures)}'
+      '${detail.isEmpty ? '' : '；aria2 输出：$detail'}',
+      needsBinary: detail.contains('No such file'),
+    );
+  }
+
+  static String _describeFailures(Map<String, String> failures) {
+    if (failures.isEmpty) return '';
+    return '；连接失败：${failures.entries.map((e) => '${e.key} → ${e.value}').join('，')}';
   }
 
   Future<String> _resolveBinary() async {
