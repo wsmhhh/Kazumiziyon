@@ -8,6 +8,7 @@ import 'package:kazumi/modules/bt/bt_task.dart';
 import 'package:kazumi/services/bt/aria2_client.dart';
 import 'package:kazumi/services/bt/aria2_engine.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/storage/storage.dart';
 
 /// App-wide BitTorrent state. Registered as a singleton in [coreModule].
 ///
