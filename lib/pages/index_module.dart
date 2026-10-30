@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/bean/widget/image_preview.dart';
+import 'package:kazumi/pages/bt/bt_module.dart';
 import 'package:kazumi/pages/collect/collect_module.dart';
 import 'package:kazumi/pages/index_page.dart';
 import 'package:kazumi/pages/info/info_module.dart';
@@ -102,6 +103,7 @@ final indexModule = createModule(
       )
       ..module(tabModule)
       ..module(videoModule)
+      ..module(btModule)
       ..route(
         ImageViewer.routePath,
         child: (context, state) {

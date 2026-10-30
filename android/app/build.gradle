@@ -42,6 +42,15 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
+    packagingOptions {
+        // The bundled aria2c (jniLibs/<abi>/libaria2c.so) must be extracted to
+        // nativeLibraryDir so the app can execute it; Android 10+ forbids
+        // exec from app data directories.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId "com.predidit.kazumi"

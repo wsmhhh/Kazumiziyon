@@ -582,8 +582,11 @@ abstract class _VideoPageController with Store implements Disposable {
 
   String? _getLocalVideoPath(
       int bangumiId, String pluginName, int episodeNumber) {
+    // BT playback supplies synthetic episodes that never enter the download
+    // repository, so fall back to the in-memory list built from the route args.
     final episode =
-        downloadRepository.getEpisode(bangumiId, pluginName, episodeNumber);
+        downloadRepository.getEpisode(bangumiId, pluginName, episodeNumber) ??
+            _offlineEpisodesByNumber[episodeNumber];
     return downloadManager.getLocalVideoPath(episode);
   }
 

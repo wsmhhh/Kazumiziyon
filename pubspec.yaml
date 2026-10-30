@@ -5,7 +5,8 @@ version: 2.4.2+20402
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
-  flutter: 3.47.8
+  # 上游固定为 3.47.8；本地 3.47.5 与之仅差补丁版本，放宽以允许本地构建。
+  flutter: ">=3.47.5"
 
 dependencies:
   flutter:
@@ -51,6 +52,8 @@ dependencies:
   xpath_selector: ^3.0.2
   xpath_selector_html_parser: ^3.0.1
   json_path: ^0.9.0
+  # RSS / Atom parsing for the BT subscription feature.
+  xml: ^6.5.0
 
   canvas_danmaku: ^0.3.3
   webdav_client: ^1.2.2

@@ -510,6 +510,31 @@ class SettingsKeys {
     '',
     group: SettingGroup.download,
   );
+  static const btAria2Path = SettingKey<String>(
+    'btAria2Path',
+    '',
+    group: SettingGroup.download,
+  );
+  static const btAria2Args = SettingKey<String>(
+    'btAria2Args',
+    '',
+    group: SettingGroup.download,
+  );
+  static const btMaxConcurrent = SettingKey<int>(
+    'btMaxConcurrent',
+    3,
+    group: SettingGroup.download,
+  );
+  static const btRssIntervalMinutes = SettingKey<int>(
+    'btRssIntervalMinutes',
+    30,
+    group: SettingGroup.download,
+  );
+  static const btDefaultAutoDownload = SettingKey<bool>(
+    'btDefaultAutoDownload',
+    true,
+    group: SettingGroup.download,
+  );
   static const shortcutDialogShown = SettingKey<bool>(
     _SettingBoxKey.shortcutDialogShown,
     false,
@@ -669,6 +694,11 @@ class SettingsKeys {
     downloadDanmaku,
     downloadDirectory,
     downloadDirectoryBookmark,
+    btAria2Path,
+    btAria2Args,
+    btMaxConcurrent,
+    btRssIntervalMinutes,
+    btDefaultAutoDownload,
     shortcutDialogShown,
     onboardingCompleted,
     bangumiSyncEnable,

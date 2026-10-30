@@ -12,6 +12,8 @@ enum MyDestination {
   rules,
   history,
   downloads,
+  bt,
+  rss,
   sync,
   storage,
   about,
@@ -122,6 +124,25 @@ class _WideSpaceLayout extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        _AdaptivePair(
+          first: _ToolTile(
+            icon: Icons.downloading_rounded,
+            title: 'BT 下载',
+            caption: '种子、磁力与边下边播',
+            color: colors.tertiaryContainer,
+            foreground: colors.onTertiaryContainer,
+            onTap: () => onOpen(MyDestination.bt),
+          ),
+          second: _ToolTile(
+            icon: Icons.rss_feed_rounded,
+            title: 'RSS 订阅',
+            caption: '自动追番与入库',
+            color: colors.secondaryContainer,
+            foreground: colors.onSecondaryContainer,
+            onTap: () => onOpen(MyDestination.rss),
+          ),
+        ),
         const SizedBox(height: 24),
         Align(
           alignment: Alignment.center,
@@ -212,6 +233,14 @@ class _CompactSpaceLayout extends StatelessWidget {
                 '存储管理', Icons.cleaning_services_rounded, MyDestination.storage),
             _entry(
                 '关于 Kazumi', Icons.info_outline_rounded, MyDestination.about),
+          ],
+        ),
+        const SizedBox(height: 24),
+        ContentSection.group(
+          title: 'BT 与 RSS',
+          children: [
+            _entry('BT 下载', Icons.downloading_rounded, MyDestination.bt),
+            _entry('RSS 订阅', Icons.rss_feed_rounded, MyDestination.rss),
           ],
         ),
       ],

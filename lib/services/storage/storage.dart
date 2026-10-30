@@ -28,6 +28,15 @@ class GStorage {
   static late Box<SearchHistory> searchHistory;
   static late Box<DownloadRecord> downloads;
 
+  /// BT/RSS feature state is stored as JSON strings so neither model needs a
+  /// Hive adapter; unknown fields survive schema tweaks.
+  static late Box<String> btRssSubscriptions;
+  static late Box<String> btRssSeen;
+
+  /// Last known aria2 task snapshots, so BT content is browsable/playable
+  /// even before the engine starts in a new session.
+  static late Box<String> btTasks;
+
   /// Hive directory path, initialized during init()
   static String? _hivePath;
 
@@ -159,6 +168,9 @@ class GStorage {
     shieldList = await _openBoxSafe<String>('shieldList');
     searchHistory = await _openBoxSafe<SearchHistory>('searchHistory');
     downloads = await _openBoxSafe<DownloadRecord>('downloads');
+    btRssSubscriptions = await _openBoxSafe<String>('btRssSubscriptions');
+    btRssSeen = await _openBoxSafe<String>('btRssSeen');
+    btTasks = await _openBoxSafe<String>('btTasks');
     if (Platform.isIOS) {
       await rebaseIosDownloadPaths(downloads);
     }

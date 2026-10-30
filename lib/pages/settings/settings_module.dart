@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/pages/about/about_module.dart';
+import 'package:kazumi/pages/bt/bt_settings_page.dart';
+import 'package:kazumi/pages/bt/rss_feed_page.dart';
+import 'package:kazumi/pages/bt/rss_page.dart';
 import 'package:kazumi/pages/download/download_page_module.dart';
+import 'package:kazumi/pages/route_error_page.dart';
 import 'package:kazumi/pages/history/history_module.dart';
 import 'package:kazumi/pages/logs/logs_page.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_module.dart';
@@ -86,6 +90,26 @@ final settingsModule = createModule(
           ..route(
             '/download-settings',
             child: (context, state) => const DownloadSettingsPage(),
+          )
+          ..route(
+            '/bt',
+            child: (context, state) => const BtSettingsPage(),
+          )
+          ..route(
+            '/rss',
+            child: (context, state) => const RssPage(),
+          )
+          ..route(
+            '/rss/feed',
+            child: (context, state) {
+              final id = state.arguments;
+              if (id is! String || id.isEmpty) {
+                return const RouteErrorPage(
+                  message: 'RSS 订阅参数无效，请返回后重试。',
+                );
+              }
+              return RssFeedPage(subscriptionId: id);
+            },
           );
       },
     );

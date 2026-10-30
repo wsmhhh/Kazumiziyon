@@ -20,6 +20,8 @@ import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/plugins/anti_crawler_config.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
+import 'package:kazumi/services/bt/bt_download_controller.dart';
+import 'package:kazumi/services/bt/bt_playback_library.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
@@ -44,6 +46,7 @@ class SourceSheet extends StatefulWidget {
 class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   final CollectController _collectController = inject<CollectController>();
   final PluginsController _pluginsController = inject<PluginsController>();
+  final BtDownloadController _btController = BtDownloadController();
   final Map<String, String> _sourceKeywords = {};
 
   late final String _keyword;
@@ -64,10 +67,17 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onCancelled: (plugin) => _retry(plugin.name),
     );
     _searchService.queryAllSource(_keyword);
+    _btController.addListener(_onBtChanged);
+    unawaited(_btController.loadCache());
+  }
+
+  void _onBtChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _btController.removeListener(_onBtChanged);
     _searchService.cancel();
     _captchaFlow.dispose();
     super.dispose();
@@ -120,6 +130,10 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
 
   Future<void> _openSearchItem(String name, SearchItem searchItem) async {
     if (dialogs.isRunning) return;
+    if (name == BtPlaybackLibrary.sourceName) {
+      _playBtEpisode(searchItem.src);
+      return;
+    }
     final plugin = _pluginFor(name);
     await dialogs.run((task) async {
       final cancelToken = RuleCancelToken();
@@ -147,8 +161,39 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
     });
   }
 
-  void _showAliasPicker(String pluginName) {
-    if (widget.infoController.bangumiItem.alias.isEmpty) {
+  /// Plays a BT file through the app's normal offline playback path so the
+  /// original player (danmaku, gestures, history) is used unchanged.
+  void _playBtEpisode(String path) {
+    const library = BtPlaybackLibrary();
+    final item = widget.infoController.bangumiItem;
+    final episodes = library.episodesFor(item);
+    BtPlayableEpisode? target;
+    for (final episode in episodes) {
+      if (episode.path == path) {
+        target = episode;
+        break;
+      }
+    }
+    if (target == null) {
+      KazumiDialog.showToast(message: '该 BT 文件已不可用，请刷新下载任务');
+      return;
+    }
+    // Incomplete files keep downloading while watched; starting is harmless
+    // when the engine is already running.
+    unawaited(_btController.startEngine());
+    context.pushNamed(
+      '/video/',
+      arguments: OfflineVideoPlaybackArgs(
+        bangumiItem: item,
+        pluginName: BtPlaybackLibrary.sourceName,
+        episodeNumber: target.episode,
+        road: 0,
+        downloadedEpisodes: library.toDownloadEpisodes(episodes),
+      ),
+    );
+  }
+
+  void _showAliasPicker(String pluginName) {    if (widget.infoController.bangumiItem.alias.isEmpty) {
       KazumiDialog.showToast(message: '无可用别名，试试修改检索关键词');
       return;
     }
@@ -189,7 +234,27 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
               ),
           };
           final seenBySource = <String, Set<String>>{};
-          String? firstResultSource;
+          final btEpisodes =
+              const BtPlaybackLibrary().episodesFor(widget.infoController.bangumiItem);
+          final btGroup = btEpisodes.isEmpty
+              ? null
+              : _SourceSearchGroup(
+                  name: BtPlaybackLibrary.sourceName,
+                  keyword: _keyword,
+                  status: PluginSearchStatus.success,
+                  results: [
+                    for (final episode in btEpisodes)
+                      SearchItem(
+                        name: episode.complete
+                            ? episode.displayName
+                            : '${episode.displayName} · 边下边播 '
+                                '${(episode.progress * 100).toStringAsFixed(0)}%',
+                        src: episode.path,
+                      ),
+                  ],
+                  isLocal: true,
+                );
+          String? firstResultSource = btGroup?.name;
           // Responses follow completion order; groups keep configured order.
           for (final response
               in widget.infoController.pluginSearchResponseList) {
@@ -203,7 +268,10 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           }
           return _SourceSheetView(
             keyword: _keyword,
-            groups: groupsByName.values.toList(),
+            groups: [
+              if (btGroup != null) btGroup,
+              ...groupsByName.values,
+            ],
             firstResultSource: firstResultSource,
             onSourceSearch: _showCustomKeyword,
             onSourceAliasSearch: _showAliasPicker,

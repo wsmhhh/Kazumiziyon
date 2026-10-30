@@ -4,6 +4,7 @@ import 'package:kazumi/pages/download/download_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
+import 'package:kazumi/services/bt/bt_playback_library.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
     show RuleCancelToken;
@@ -95,6 +96,10 @@ class HistoryPlaybackService {
   }
 
   VideoPlaybackArgs? _offlineArgs(History history) {
+    if (history.adapterName == BtPlaybackLibrary.sourceName) {
+      return _btArgs(history);
+    }
+
     final downloadedEpisodes = _downloadController.getCompletedEpisodes(
       history.bangumiItem.id,
       history.adapterName,
@@ -136,6 +141,26 @@ class HistoryPlaybackService {
       episodeNumber: targetEpisode.episodeNumber,
       road: targetEpisode.road,
       downloadedEpisodes: downloadedEpisodes,
+    );
+  }
+
+  /// BT episodes are re-derived from aria2's task snapshot instead of the
+  /// download repository, so a history entry keeps working across launches.
+  VideoPlaybackArgs? _btArgs(History history) {
+    const library = BtPlaybackLibrary();
+    final episodes = library.episodesFor(history.bangumiItem);
+    if (episodes.isEmpty) return null;
+
+    final target = episodes.firstWhere(
+      (episode) => episode.episode == history.lastWatchEpisode,
+      orElse: () => episodes.first,
+    );
+    return OfflineVideoPlaybackArgs(
+      bangumiItem: history.bangumiItem,
+      pluginName: BtPlaybackLibrary.sourceName,
+      episodeNumber: target.episode,
+      road: 0,
+      downloadedEpisodes: library.toDownloadEpisodes(episodes),
     );
   }
 }

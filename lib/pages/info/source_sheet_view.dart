@@ -6,6 +6,7 @@ class _SourceSearchGroup {
     required this.keyword,
     required this.status,
     required this.results,
+    this.isLocal = false,
   });
 
   final String name;
@@ -13,18 +14,26 @@ class _SourceSearchGroup {
   final PluginSearchStatus status;
   final List<SearchItem> results;
 
+  /// Local BT files behave like a source but have no search/verify actions.
+  final bool isLocal;
+
   bool get isSearching => status == PluginSearchStatus.pending;
   bool get hasResults =>
       status == PluginSearchStatus.success && results.isNotEmpty;
 
-  String get statusLabel => switch (status) {
-        PluginSearchStatus.pending => '检索中…',
-        PluginSearchStatus.success =>
-          results.isEmpty ? '无结果' : '${results.length} 个结果',
-        PluginSearchStatus.noResult => '无结果',
-        PluginSearchStatus.error => '检索失败',
-        PluginSearchStatus.captcha => '需要验证',
-      };
+  String get statusLabel {
+    if (isLocal) {
+      return results.isEmpty ? '无本地文件' : '${results.length} 集';
+    }
+    return switch (status) {
+      PluginSearchStatus.pending => '检索中…',
+      PluginSearchStatus.success =>
+        results.isEmpty ? '无结果' : '${results.length} 个结果',
+      PluginSearchStatus.noResult => '无结果',
+      PluginSearchStatus.error => '检索失败',
+      PluginSearchStatus.captcha => '需要验证',
+    };
+  }
 }
 
 enum _SourceDisplay { preview, expanded, collapsed }
@@ -241,11 +250,11 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
                   ),
                 ),
               ),
-              _buildSourceMenu(group),
+              if (!group.isLocal) _buildSourceMenu(group),
             ],
           ),
         ),
-        if (!collapsed && group.keyword != widget.keyword)
+        if (!group.isLocal && !collapsed && group.keyword != widget.keyword)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Text(

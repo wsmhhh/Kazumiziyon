@@ -68,6 +68,18 @@ const List<_SettingsGroup> _settingsGroups = [
         icon: Icons.downloading_rounded,
         path: '/settings/download-settings',
       ),
+      _SettingsCategory(
+        label: 'BT 下载',
+        description: 'aria2 引擎与并发',
+        icon: Icons.swap_horiz_rounded,
+        path: '/settings/bt',
+      ),
+      _SettingsCategory(
+        label: 'RSS 订阅',
+        description: '订阅源与自动下载',
+        icon: Icons.rss_feed_rounded,
+        path: '/settings/rss',
+      ),
     ],
   ),
   _SettingsGroup(

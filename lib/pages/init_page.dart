@@ -13,6 +13,8 @@ import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/shaders/shader_asset_service.dart';
 import 'package:kazumi/pages/download/download_controller.dart';
+import 'package:kazumi/services/rss/rss_controller.dart';
+import 'package:kazumi/services/bt/bt_download_controller.dart';
 import 'package:kazumi/pages/plugin_editor/plugin_update_actions.dart';
 import 'package:kazumi/services/download/background_download_service.dart';
 import 'package:kazumi/services/platform/windows_shortcut.dart';
@@ -68,6 +70,10 @@ class _InitPageState extends State<InitPage> {
     } catch (e) {
       KazumiLogger().e('InitPage: downloadController.init() failed', error: e);
     }
+    // Loads RSS subscriptions and starts the periodic check. Engine processes
+    // are only spawned when a feed item actually matches an auto-download rule.
+    unawaited(RssController().init());
+    unawaited(BtDownloadController().loadCache());
 
     await _checkRunningOnX11();
     await _showShortcutDialog();

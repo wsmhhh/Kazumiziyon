@@ -29,11 +29,13 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.ryanheise.audioservice.AudioService
 import com.ryanheise.audioservice.AudioServiceActivity
+import java.io.File
 
 class MainActivity: AudioServiceActivity() {
     private val CHANNEL = "com.predidit.kazumi/intent"
     private val STORAGE_CHANNEL = "com.predidit.kazumi/storage"
     private val PIP_CHANNEL = "com.predidit.kazumi/pip"
+    private val BT_CHANNEL = "com.predidit.kazumi/bt"
     private var intentChannel: MethodChannel? = null
     private var pipChannel: MethodChannel? = null
     private var downloadDirectoryChannel: MethodChannel? = null
@@ -142,6 +144,18 @@ class MainActivity: AudioServiceActivity() {
                 result.success(availableBytes)
             } else {
                 result.notImplemented()
+            }
+        }
+
+        // The bundled aria2c lives in nativeLibraryDir as libaria2c.so so that
+        // Android 10+ allows executing it (app data dirs are non-executable).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BT_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getNativeLibraryDir" -> result.success(applicationInfo.nativeLibraryDir)
+                "getFilesDir" -> result.success(filesDir.absolutePath)
+                "isAria2Bundled" ->
+                    result.success(File(applicationInfo.nativeLibraryDir, "libaria2c.so").exists())
+                else -> result.notImplemented()
             }
         }
 

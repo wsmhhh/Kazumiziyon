@@ -11,6 +11,8 @@ import 'package:kazumi/repositories/danmaku_shield_repository.dart';
 import 'package:kazumi/repositories/history_repository.dart';
 import 'package:kazumi/repositories/search_history_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
+import 'package:kazumi/services/bt/bt_download_controller.dart';
+import 'package:kazumi/services/rss/rss_controller.dart';
 import 'package:kazumi/services/player/audio_controller.dart';
 import 'package:kazumi/services/player/history_playback_service.dart';
 import 'package:kazumi/services/shaders/shader_asset_service.dart';
@@ -44,6 +46,8 @@ final coreModule = createModule(
       ..addSingleton<CollectController>(CollectController.new)
       ..addSingleton<HistoryController>(HistoryController.new)
       ..addSingleton<MyController>(MyController.new)
-      ..addSingleton<DownloadController>(DownloadController.new);
+      ..addSingleton<DownloadController>(DownloadController.new)
+      ..addSingleton<BtDownloadController>(BtDownloadController.new)
+      ..addSingleton<RssController>(RssController.new);
   },
 );
