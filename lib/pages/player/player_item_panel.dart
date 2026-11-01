@@ -876,10 +876,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                   ),
                 ),
               if (compact) _buildDanmakuToggleButton(context),
-              PlayerPanelHoldCollectButton(
-                acquirePlayerPanelHold: widget.acquirePlayerPanelHold,
-                bangumiItem: videoPageController.bangumiItem,
-              ),
+              // 本地文件没有对应的番剧条目，无法追番。
+              if (!videoPageController.isLocalFileMode)
+                PlayerPanelHoldCollectButton(
+                  acquirePlayerPanelHold: widget.acquirePlayerPanelHold,
+                  bangumiItem: videoPageController.bangumiItem,
+                ),
               PlayerPanelHoldMenuAnchor(
                 acquirePlayerPanelHold: widget.acquirePlayerPanelHold,
                 onVisibilityChanged: widget.onMenuVisibilityChanged,
@@ -903,7 +905,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     SubmenuButton(
                         menuChildren: _superResolutionItems,
                         child: const Text('超分辨率')),
-                    _syncPlayMenuItem,
+                    if (!videoPageController.isLocalFileMode) _syncPlayMenuItem,
                   ],
                   KazumiMenuItem(
                     onPressed: widget.showDanmakuSwitch,
@@ -914,21 +916,23 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     onPressed: widget.showVideoInfo,
                     label: '视频详情',
                   ),
-                  KazumiMenuItem(
-                    onPressed: () {
-                      final needRestart = playerController.playback.playing;
-                      playerController.pause();
-                      RemotePlay()
-                          .castVideo(playerController.videoUrl,
-                              videoPageController.currentPlugin.referer)
-                          .whenComplete(() {
-                        if (mounted && needRestart) {
-                          playerController.play();
-                        }
-                      });
-                    },
-                    label: '远程投屏',
-                  ),
+                  // 本地/离线视频没有可投屏的远程地址。
+                  if (!videoPageController.isOfflineMode)
+                    KazumiMenuItem(
+                      onPressed: () {
+                        final needRestart = playerController.playback.playing;
+                        playerController.pause();
+                        RemotePlay()
+                            .castVideo(playerController.videoUrl,
+                                videoPageController.currentPlugin.referer)
+                            .whenComplete(() {
+                          if (mounted && needRestart) {
+                            playerController.play();
+                          }
+                        });
+                      },
+                      label: '远程投屏',
+                    ),
                   KazumiMenuItem(
                     onPressed: playerController.launchExternalPlayer,
                     label: '外部播放',
@@ -972,7 +976,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       ),
                     ),
                   ),
-                  if (!compact) _syncPlayMenuItem,
+                  if (!compact && !videoPageController.isLocalFileMode)
+                    _syncPlayMenuItem,
                 ],
               ),
             ],

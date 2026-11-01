@@ -246,6 +246,13 @@ class SettingsKeys {
     true,
     group: SettingGroup.player,
   );
+
+  /// 本地播放断点记录，JSON 编码：文件路径 -> {p: 位置秒, d: 时长秒, t: 更新时间}。
+  static const localVideoProgress = SettingKey<String>(
+    'localVideoProgress',
+    '',
+    group: SettingGroup.player,
+  );
   static const showPlayerError = SettingKey<bool>(
     _SettingBoxKey.showPlayerError,
     false,

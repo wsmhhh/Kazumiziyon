@@ -19,6 +19,7 @@ class EpisodeSelectionPanel extends StatefulWidget {
     required this.downloads,
     this.onDownload,
     this.isOffline = false,
+    this.isLocalFiles = false,
     this.isPlaying = false,
     this.disableAnimations = false,
   });
@@ -31,6 +32,9 @@ class EpisodeSelectionPanel extends StatefulWidget {
   final ValueChanged<int>? onDownload;
   final Map<String, DownloadEpisode> downloads;
   final bool isOffline;
+
+  /// 正在播放用户选择的本地视频文件（而非下载缓存）。
+  final bool isLocalFiles;
   final bool isPlaying;
   final bool disableAnimations;
 
@@ -53,6 +57,16 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
 
   double get _toolbarHeight =>
       math.max(56, MediaQuery.textScalerOf(context).scale(20) + 8);
+
+  String _episodeCountLabel({required int count, required bool compactText}) {
+    if (widget.isLocalFiles) {
+      return compactText ? '$count 个文件' : '本地文件 · $count 个';
+    }
+    if (widget.isOffline) {
+      return compactText ? '$count 集' : '已缓存 · $count 集';
+    }
+    return compactText ? '$count 集' : '全部剧集 · $count 集';
+  }
 
   void _selectRoad(int road) {
     if (_visibleRoad == road) return;
@@ -137,6 +151,7 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
                         roads: widget.roads,
                         visibleRoad: _visibleRoad,
                         isOffline: widget.isOffline,
+                        isLocalFiles: widget.isLocalFiles,
                         onChanged: _selectRoad,
                         disableAnimations: widget.disableAnimations,
                       ),
@@ -155,12 +170,11 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
                       children: [
                         Expanded(
                           child: Text(
-                            textScaler.scale(14) > 21 ||
-                                    constraints.maxWidth < 320
-                                ? '$count 集'
-                                : widget.isOffline
-                                    ? '已缓存 · $count 集'
-                                    : '全部剧集 · $count 集',
+                            _episodeCountLabel(
+                              count: count,
+                              compactText: textScaler.scale(14) > 21 ||
+                                  constraints.maxWidth < 320,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelLarge?.copyWith(
@@ -270,6 +284,7 @@ class _RoadSelector extends StatefulWidget {
     required this.roads,
     required this.visibleRoad,
     required this.isOffline,
+    required this.isLocalFiles,
     required this.onChanged,
     required this.disableAnimations,
   });
@@ -277,6 +292,7 @@ class _RoadSelector extends StatefulWidget {
   final List<Road> roads;
   final int visibleRoad;
   final bool isOffline;
+  final bool isLocalFiles;
   final ValueChanged<int> onChanged;
   final bool disableAnimations;
 
@@ -469,7 +485,11 @@ class _RoadSelectorState extends State<_RoadSelector> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.isOffline ? '离线观看' : '播放线路',
+                              widget.isLocalFiles
+                                  ? '本地播放'
+                                  : widget.isOffline
+                                      ? '离线观看'
+                                      : '播放线路',
                               style: theme.textTheme.labelMedium
                                   ?.copyWith(color: foreground),
                             ),

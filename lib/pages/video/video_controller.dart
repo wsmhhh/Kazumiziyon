@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/roads/road_module.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
@@ -7,9 +8,12 @@ import 'package:kazumi/pages/history/history_controller.dart';
 import 'package:kazumi/pages/player/player_controller.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/download/download_module.dart';
+import 'package:kazumi/modules/local/local_video_module.dart';
 import 'package:kazumi/modules/history/history_module.dart';
 import 'package:kazumi/repositories/download_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
+import 'package:kazumi/services/player/local_video_library.dart';
+import 'package:kazumi/services/player/local_video_progress_store.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
@@ -124,6 +128,13 @@ abstract class _VideoPageController with Store implements Disposable {
   @observable
   bool isOfflineMode = false;
 
+  /// 是否在用内置播放器播放用户选择的本地文件。
+  ///
+  /// 与离线下载共用播放页和 UI 分支，但不读写下载记录、不写入番剧观看历史。
+  bool isLocalFileMode = false;
+
+  List<LocalVideoEntry> _localFiles = const [];
+
   PlaybackHistoryIdentity? _playbackHistoryIdentity;
   final Map<int, DownloadEpisode> _offlineEpisodesByNumber = {};
   final Map<int, int> _offlineDisplayRoadToOriginalRoad = {};
@@ -140,6 +151,9 @@ abstract class _VideoPageController with Store implements Disposable {
   late Plugin currentPlugin;
 
   String _offlinePluginName = '';
+
+  /// 当前正在播放的本地文件在断点记录中的键。
+  String _localProgressKey = '';
 
   final HistoryController historyController;
   final IDownloadRepository downloadRepository;
@@ -173,6 +187,8 @@ abstract class _VideoPageController with Store implements Disposable {
           road: args.road,
           downloadedEpisodes: args.downloadedEpisodes,
         );
+      case LocalVideoPlaybackArgs():
+        _initForLocalPlayback(args);
     }
   }
 
@@ -229,6 +245,49 @@ abstract class _VideoPageController with Store implements Disposable {
     _offlineOriginalRoadToDisplayRoad.clear();
     _offlineOriginalRoadToDisplayRoad
         .addAll(snapshot.originalRoadToDisplayRoad);
+  }
+
+  @action
+  void _initForLocalPlayback(LocalVideoPlaybackArgs args) {
+    bangumiItem = args.bangumiItem;
+    title = args.playlistName;
+    // 播放器把该字段作为媒体会话的专辑名展示。
+    _offlinePluginName = '本地播放';
+    isLocalFileMode = true;
+    isOfflineMode = true;
+    _loading = false;
+    _playbackHistoryIdentity = null;
+    _localProgressKey = '';
+
+    _localFiles = List<LocalVideoEntry>.unmodifiable(args.files);
+    _buildLocalRoadList();
+
+    final startIndex = (args.startIndex >= 0 && args.startIndex < _localFiles.length)
+        ? args.startIndex
+        : 0;
+    final selected = VideoEpisodeSelection(episode: startIndex + 1, road: 0);
+    selectedEpisode = selected;
+    playingEpisode = null;
+    commentsEpisode = startIndex + 1;
+    KazumiLogger().i(
+        'VideoPageController: initialized for local playback, ${_localFiles.length} file(s), title: ${args.playlistName}');
+  }
+
+  void _buildLocalRoadList() {
+    roadList.clear();
+    _offlineEpisodesByNumber.clear();
+    _offlineDisplayRoadToOriginalRoad.clear();
+    _offlineOriginalRoadToDisplayRoad.clear();
+    if (_localFiles.isEmpty) {
+      return;
+    }
+    roadList.add(
+      Road(
+        name: '本地文件',
+        data: [for (var index = 1; index <= _localFiles.length; index++) '$index'],
+        identifier: [for (final file in _localFiles) file.title],
+      ),
+    );
   }
 
   String get offlinePluginName => _offlinePluginName;
@@ -367,7 +426,30 @@ abstract class _VideoPageController with Store implements Disposable {
     );
   }
 
+  EpisodeRef? _resolveLocalEpisode(int episode, {int? road}) {
+    final targetRoad = road ?? selectedEpisode.road;
+    if (targetRoad != 0 || _localFiles.isEmpty) {
+      return null;
+    }
+    final index = episode - 1;
+    if (index < 0 || index >= _localFiles.length) {
+      return null;
+    }
+    final file = _localFiles[index];
+    return EpisodeRef.offline(
+      listIndex: episode,
+      roadIndex: 0,
+      displayTitle: file.title,
+      pageUrl: file.path,
+      episodeNumber: episode,
+      originalRoadIndex: 0,
+    );
+  }
+
   EpisodeRef? resolveEpisode(VideoEpisodeSelection selection) {
+    if (isLocalFileMode) {
+      return _resolveLocalEpisode(selection.episode, road: selection.road);
+    }
     return isOfflineMode
         ? _resolveOfflineEpisode(selection.episode, road: selection.road)
         : _resolveOnlineEpisode(selection.episode, road: selection.road);
@@ -427,6 +509,11 @@ abstract class _VideoPageController with Store implements Disposable {
       episode: episode,
       road: currentRoad,
     );
+    recordLocalProgress(
+      playerController.playback.playerPosition,
+      playerController.playback.playerDuration,
+      force: true,
+    );
     _beginEpisodeSwitch(selection);
     _danmakuSessions.cancel();
     playerController.danmaku.finishDanmakuLoad();
@@ -434,6 +521,16 @@ abstract class _VideoPageController with Store implements Disposable {
 
     await playerController.stop();
     if (session.isStale) {
+      return;
+    }
+
+    if (isLocalFileMode) {
+      await _changeLocalEpisode(
+        selection,
+        offset,
+        session: session,
+        playerController: playerController,
+      );
       return;
     }
 
@@ -537,6 +634,93 @@ abstract class _VideoPageController with Store implements Disposable {
     } else if (session.isActive) {
       _playbackSessions.cancel();
     }
+  }
+
+  Future<void> _changeLocalEpisode(
+    VideoEpisodeSelection selection,
+    int offset, {
+    required AsyncSession session,
+    required PlayerController playerController,
+  }) async {
+    final resolvedEpisode =
+        _resolveLocalEpisode(selection.episode, road: selection.road);
+    if (resolvedEpisode == null) {
+      KazumiLogger().e(
+          'VideoPageController: failed to resolve local video. road=${selection.road}, index=${selection.episode}');
+      _failLoading('本地播放列表为空');
+      return;
+    }
+
+    final localPath = resolvedEpisode.pageUrl;
+    final progressKey = localVideoProgressKey(localPath);
+    final exists = await File(localPath).exists();
+    if (!exists) {
+      LocalVideoProgressStore.instance.remove(progressKey);
+      _failLoading('本地文件已被移动或删除');
+      return;
+    }
+    _applyResolvedSelection(resolvedEpisode);
+    _playbackHistoryIdentity = null;
+    if (session.isStale) {
+      return;
+    }
+    _finishLoading();
+    final resumeEnabled = GStorage.getSetting(SettingsKeys.playResume) == true;
+    final int resolvedOffset = offset > 0
+        ? offset
+        : (resumeEnabled
+            ? LocalVideoProgressStore.instance.positionFor(progressKey).inSeconds
+            : 0);
+
+    KazumiLogger().i(
+        'VideoPageController: local video changed to ${resolvedEpisode.displayTitle} (index: ${selection.episode}), path: $localPath, offset: $resolvedOffset');
+
+    final params = PlaybackInitParams(
+      videoUrl: localPath,
+      offset: resolvedOffset,
+      isLocalPlayback: true,
+      bangumiId: bangumiItem.id,
+      pluginName: '',
+      episode: resolvedEpisode.listIndex,
+      danmakuEpisodeNumber: resolvedEpisode.danmakuEpisodeNumber,
+      pageUrl: localPath,
+      sortNumber: resolvedEpisode.sortNumber,
+      httpHeaders: const {},
+      adBlockerEnabled: false,
+      episodeTitle: resolvedEpisode.displayTitle,
+      referer: '',
+      currentRoad: 0,
+      coverUrl: null,
+      bangumiName: title,
+    );
+
+    final initialized = await playerController.init(params);
+    if (session.isActive && initialized) {
+      playingEpisode = selection;
+      _localProgressKey = progressKey;
+      // 本地文件没有对应的缓存弹幕，切换文件时清掉上一集的弹幕；
+      // 用户仍可通过「弹幕切换」手动检索。
+      playerController.danmaku.finishDanmakuLoad(disableDanmaku: true);
+    } else if (session.isActive) {
+      _playbackSessions.cancel();
+    }
+  }
+
+  /// 记录当前本地视频的播放位置；非本地播放时什么也不做。
+  void recordLocalProgress(
+    Duration position,
+    Duration duration, {
+    bool force = false,
+  }) {
+    if (!isLocalFileMode || _localProgressKey.isEmpty) {
+      return;
+    }
+    LocalVideoProgressStore.instance.save(
+      _localProgressKey,
+      position,
+      duration: duration,
+      force: force,
+    );
   }
 
   Future<void> _loadPlaybackDanmaku(
@@ -763,6 +947,7 @@ abstract class _VideoPageController with Store implements Disposable {
     _commentSessions.cancel();
     _logSubscription?.cancel();
     _logSubscription = null;
+    unawaited(LocalVideoProgressStore.instance.flush());
     if (!_logStreamController.isClosed) {
       _logStreamController.close();
     }

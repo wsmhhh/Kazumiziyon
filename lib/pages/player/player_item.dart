@@ -1190,14 +1190,19 @@ class _PlayerItemState extends State<PlayerItem>
       }
       final historyIdentity = videoPageController.currentHistoryIdentity;
       if (playerController.playback.playerPlaying &&
-          !videoPageController.loading &&
-          historyIdentity != null &&
-          historyIdentity.canRecord) {
-        historyController.updateHistory(
-          historyIdentity,
-          playerController.playback.playerPosition,
-          duration: playerController.playback.playerDuration,
-        );
+          !videoPageController.loading) {
+        if (historyIdentity != null && historyIdentity.canRecord) {
+          historyController.updateHistory(
+            historyIdentity,
+            playerController.playback.playerPosition,
+            duration: playerController.playback.playerDuration,
+          );
+        } else if (videoPageController.isLocalFileMode) {
+          videoPageController.recordLocalProgress(
+            playerController.playback.playerPosition,
+            playerController.playback.playerDuration,
+          );
+        }
       }
       final playingSelection = videoPageController.playbackEpisode;
       final playingRoadData =

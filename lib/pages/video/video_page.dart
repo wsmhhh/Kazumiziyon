@@ -86,7 +86,10 @@ class _VideoPageState extends State<VideoPage>
     videoPageController.applyPlaybackArgs(widget.args);
     windowManager.addListener(this);
 
-    tabController = TabController(length: 2, vsync: this);
+    tabController = TabController(
+      length: videoPageController.isLocalFileMode ? 1 : 2,
+      vsync: this,
+    );
 
     playResume = GStorage.getSetting(SettingsKeys.playResume);
     disableAnimations =
@@ -210,6 +213,12 @@ class _VideoPageState extends State<VideoPage>
   @override
   void dispose() {
     clearExternalNavigationMark(_route);
+    // 离开播放页前记下本地文件的播放位置，供下次断点续播。
+    videoPageController.recordLocalProgress(
+      playerController.playback.playerPosition,
+      playerController.playback.playerDuration,
+      force: true,
+    );
     try {
       windowManager.removeListener(this);
     } catch (_) {}
@@ -519,6 +528,7 @@ class _VideoPageState extends State<VideoPage>
           selectedEpisode: videoPageController.selectedEpisode.episode,
           downloads: downloads,
           isOffline: videoPageController.isOfflineMode,
+          isLocalFiles: videoPageController.isLocalFileMode,
           isPlaying: playerController.playback.playing &&
               !playerController.playback.loading &&
               !videoPageController.loading,
@@ -544,6 +554,7 @@ class _VideoPageState extends State<VideoPage>
   Widget get tabBody {
     final colors = Theme.of(context).colorScheme;
     final int episodeNum = videoPageController.commentsEpisode;
+    final bool showComments = !videoPageController.isLocalFileMode;
 
     return ColoredBox(
       color: colors.surface,
@@ -553,17 +564,20 @@ class _VideoPageState extends State<VideoPage>
           PlayerContentTabs(
             controller: tabController,
             onEpisodesSelected: _revealCurrentEpisode,
+            showComments: showComments,
           ),
           Expanded(
             child: TabBarView(
               controller: tabController,
               children: [
                 episodePanel,
-                EpisodeCommentsSheet(
-                  episode: episodeNum,
-                  selection: videoPageController.selectedEpisode,
-                  videoPageController: videoPageController,
-                ),
+                // 本地文件没有关联的番剧条目，不提供评论标签页。
+                if (showComments)
+                  EpisodeCommentsSheet(
+                    episode: episodeNum,
+                    selection: videoPageController.selectedEpisode,
+                    videoPageController: videoPageController,
+                  ),
               ],
             ),
           ),

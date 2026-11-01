@@ -5,10 +5,14 @@ class PlayerContentTabs extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onEpisodesSelected,
+    this.showComments = true,
   });
 
   final TabController controller;
   final VoidCallback onEpisodesSelected;
+
+  /// 本地文件没有关联的番剧条目，此时只展示选集。
+  final bool showComments;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +42,7 @@ class PlayerContentTabs extends StatelessWidget {
         },
         tabs: [
           Tab(text: '选集', height: height),
-          Tab(text: '评论', height: height),
+          if (showComments) Tab(text: '评论', height: height),
         ],
       ),
     );

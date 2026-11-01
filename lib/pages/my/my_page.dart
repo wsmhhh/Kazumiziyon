@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -6,6 +8,7 @@ import 'package:kazumi/bean/appbar/sys_app_bar.dart';
 import 'package:kazumi/pages/menu/route_visibility.dart';
 import 'package:kazumi/pages/my/my_controller.dart';
 import 'package:kazumi/pages/my/my_space_view.dart';
+import 'package:kazumi/services/player/local_video_picker.dart';
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key, required this.controller});
@@ -50,20 +53,29 @@ class _MyPageState extends State<MyPage> {
     }
   }
 
-  void _open(MyDestination destination) =>
-      context.pushNamed(switch (destination) {
-        MyDestination.theme => '/settings/theme',
-        MyDestination.player => '/settings/player',
-        MyDestination.danmaku => '/settings/danmaku/',
-        MyDestination.rules => '/settings/plugin/',
-        MyDestination.history => '/settings/history/',
-        MyDestination.downloads => '/settings/download/',
-        MyDestination.bt => '/bt/',
-        MyDestination.rss => '/settings/rss',
-        MyDestination.sync => '/settings/sync',
-        MyDestination.storage => '/settings/storage',
-        MyDestination.about => '/settings/about/',
-      });
+  static const Map<MyDestination, String> _routes = {
+    MyDestination.theme: '/settings/theme',
+    MyDestination.player: '/settings/player',
+    MyDestination.danmaku: '/settings/danmaku/',
+    MyDestination.rules: '/settings/plugin/',
+    MyDestination.history: '/settings/history/',
+    MyDestination.downloads: '/settings/download/',
+    MyDestination.bt: '/bt/',
+    MyDestination.rss: '/settings/rss',
+    MyDestination.sync: '/settings/sync',
+    MyDestination.storage: '/settings/storage',
+    MyDestination.about: '/settings/about/',
+  };
+
+  void _open(MyDestination destination) {
+    final route = _routes[destination];
+    if (route == null) {
+      // 本地播放不是独立页面，先选择视频再跳转播放器。
+      unawaited(pickAndOpenLocalVideos(context));
+      return;
+    }
+    context.pushNamed(route);
+  }
 
   @override
   Widget build(BuildContext context) {
